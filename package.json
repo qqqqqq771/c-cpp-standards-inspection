@@ -1,0 +1,761 @@
+{
+  "name": "cpp-standards",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.2.0",
+  "publisher": "qqqqqq771",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qqqqqq771/c-cpp-standards-inspection.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qqqqqq771/c-cpp-standards-inspection/issues"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "c",
+    "c++",
+    "cpp",
+    "standard",
+    "c++17",
+    "c++20",
+    "c11",
+    "intellisense"
+  ],
+  "main": "./out/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:cuda-cpp"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "cppStandards.selectCppStandard",
+        "title": "%command.selectCppStandard%",
+        "category": "%category%",
+        "icon": "$(target)"
+      },
+      {
+        "command": "cppStandards.selectCStandard",
+        "title": "%command.selectCStandard%",
+        "category": "%category%",
+        "icon": "$(target)"
+      },
+      {
+        "command": "cppStandards.manageCppStandards",
+        "title": "%command.manageCppStandards%",
+        "category": "%category%",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "cppStandards.manageCStandards",
+        "title": "%command.manageCStandards%",
+        "category": "%category%",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "cppStandards.selectStandard",
+        "title": "%command.selectStandard%",
+        "category": "%category%",
+        "icon": "$(target)"
+      },
+      {
+        "command": "cppStandards.manageStandards",
+        "title": "%command.manageStandards%",
+        "category": "%category%",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "cppStandards.setTarget",
+        "title": "%command.setTarget%",
+        "category": "%category%",
+        "icon": "$(target)"
+      },
+      {
+        "command": "cppStandards.enableStandard",
+        "title": "%command.enableStandard%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.disableStandard",
+        "title": "%command.disableStandard%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.enableAll",
+        "title": "%command.enableAll%",
+        "category": "%category%",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "cppStandards.checkWorkspace",
+        "title": "%command.checkWorkspace%",
+        "category": "%category%",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "cppStandards.syncNow",
+        "title": "%command.syncNow%",
+        "category": "%category%",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "cppStandards.copyCompilerFlag",
+        "title": "%command.copyCompilerFlag%",
+        "category": "%category%",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "cppStandards.copyStandardFlag",
+        "title": "%command.copyStandardFlag%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.openSettings",
+        "title": "%command.openSettings%",
+        "category": "%category%",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "cppStandards.cppFlag",
+        "title": "%command.cppFlag%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.cFlag",
+        "title": "%command.cFlag%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.configureRules",
+        "title": "%command.configureRules%",
+        "category": "%category%",
+        "icon": "$(settings-edit)"
+      },
+      {
+        "command": "cppStandards.setRules",
+        "title": "%command.setRules%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.disableOutside",
+        "title": "%command.disableOutside%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.findRule",
+        "title": "%command.findRule%",
+        "category": "%category%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "cppStandards.singleRules.showAvailableOnly",
+        "title": "%command.showAvailableRulesOnly%",
+        "category": "%category%",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "cppStandards.singleRules.showAll",
+        "title": "%command.showAllRules%",
+        "category": "%category%",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "cppStandards.allowRule",
+        "title": "%command.allowRule%",
+        "category": "%category%",
+        "icon": "$(check)"
+      },
+      {
+        "command": "cppStandards.disableRule",
+        "title": "%command.disableRule%",
+        "category": "%category%",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "cppStandards.resetRule",
+        "title": "%command.resetRule%",
+        "category": "%category%",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "cppStandards.setRuleSeverity",
+        "title": "%command.setRuleSeverity%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.copyRuleId",
+        "title": "%command.copyRuleId%",
+        "category": "%category%"
+      },
+      {
+        "command": "cppStandards.allowGroup",
+        "title": "%command.allowGroup%",
+        "category": "%category%",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "cppStandards.disableGroup",
+        "title": "%command.disableGroup%",
+        "category": "%category%",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "cppStandards.resetGroup",
+        "title": "%command.resetGroup%",
+        "category": "%category%",
+        "icon": "$(discard)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cppStandards",
+          "title": "%view.container%",
+          "icon": "media/activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "cppStandards": [
+        {
+          "id": "cppStandards.view",
+          "name": "%view.name%",
+          "icon": "media/activitybar.svg"
+        },
+        {
+          "id": "cppStandards.singleRules",
+          "name": "%view.singleRules%",
+          "icon": "media/activitybar.svg"
+        }
+      ]
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "cppStandards.selectStandard",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.manageStandards",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.setTarget",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.enableStandard",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.disableStandard",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.enableAll",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.copyStandardFlag",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.cppFlag",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.cFlag",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.setRules",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.disableOutside",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.singleRules.showAvailableOnly",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.singleRules.showAll",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.allowRule",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.disableRule",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.resetRule",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.setRuleSeverity",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.copyRuleId",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.allowGroup",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.disableGroup",
+          "when": "false"
+        },
+        {
+          "command": "cppStandards.resetGroup",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "cppStandards.configureRules",
+          "when": "view == cppStandards.view",
+          "group": "navigation@0"
+        },
+        {
+          "command": "cppStandards.checkWorkspace",
+          "when": "view == cppStandards.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cppStandards.syncNow",
+          "when": "view == cppStandards.view",
+          "group": "navigation@2"
+        },
+        {
+          "command": "cppStandards.copyCompilerFlag",
+          "when": "view == cppStandards.view",
+          "group": "navigation@3"
+        },
+        {
+          "command": "cppStandards.openSettings",
+          "when": "view == cppStandards.view",
+          "group": "navigation@4"
+        },
+        {
+          "command": "cppStandards.findRule",
+          "when": "view == cppStandards.singleRules",
+          "group": "navigation@0"
+        },
+        {
+          "command": "cppStandards.singleRules.showAvailableOnly",
+          "when": "view == cppStandards.singleRules && !cppStandards.singleRules.availableOnly",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cppStandards.singleRules.showAll",
+          "when": "view == cppStandards.singleRules && cppStandards.singleRules.availableOnly",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cppStandards.configureRules",
+          "when": "view == cppStandards.singleRules",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "cppStandards.selectStandard",
+          "when": "view == cppStandards.view && viewItem == langGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "cppStandards.manageStandards",
+          "when": "view == cppStandards.view && viewItem == langGroup",
+          "group": "inline@2"
+        },
+        {
+          "command": "cppStandards.configureRules",
+          "when": "view == cppStandards.view && viewItem == langGroup",
+          "group": "inline@3"
+        },
+        {
+          "command": "cppStandards.configureRules",
+          "when": "view == cppStandards.view && viewItem == langGroup",
+          "group": "1_modify@4"
+        },
+        {
+          "command": "cppStandards.selectStandard",
+          "when": "view == cppStandards.view && viewItem == langGroup",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "cppStandards.manageStandards",
+          "when": "view == cppStandards.view && viewItem == langGroup",
+          "group": "1_modify@2"
+        },
+        {
+          "command": "cppStandards.enableAll",
+          "when": "view == cppStandards.view && viewItem == langGroup",
+          "group": "1_modify@3"
+        },
+        {
+          "command": "cppStandards.setTarget",
+          "when": "view == cppStandards.view && viewItem == standard.enabled",
+          "group": "inline"
+        },
+        {
+          "command": "cppStandards.setTarget",
+          "when": "view == cppStandards.view && viewItem == standard.enabled",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "cppStandards.enableStandard",
+          "when": "view == cppStandards.view && viewItem == standard.disabled",
+          "group": "1_modify@2"
+        },
+        {
+          "command": "cppStandards.disableStandard",
+          "when": "view == cppStandards.view && viewItem =~ /^standard\\.(enabled|target)$/",
+          "group": "1_modify@3"
+        },
+        {
+          "command": "cppStandards.copyStandardFlag",
+          "when": "view == cppStandards.view && viewItem =~ /^standard\\./",
+          "group": "2_copy@1"
+        },
+        {
+          "command": "cppStandards.findRule",
+          "when": "view == cppStandards.singleRules && viewItem == ruleLang",
+          "group": "inline@1"
+        },
+        {
+          "command": "cppStandards.configureRules",
+          "when": "view == cppStandards.singleRules && viewItem == ruleLang",
+          "group": "inline@2"
+        },
+        {
+          "command": "cppStandards.configureRules",
+          "when": "view == cppStandards.singleRules && viewItem == ruleLang",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "cppStandards.allowGroup",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule(Group|Category)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "cppStandards.disableGroup",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule(Group|Category)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "cppStandards.resetGroup",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule(Group|Category)$/",
+          "group": "inline@3"
+        },
+        {
+          "command": "cppStandards.allowGroup",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule(Group|Category)$/",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "cppStandards.disableGroup",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule(Group|Category)$/",
+          "group": "1_modify@2"
+        },
+        {
+          "command": "cppStandards.resetGroup",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule(Group|Category)$/",
+          "group": "1_modify@3"
+        },
+        {
+          "command": "cppStandards.resetRule",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule\\..*\\.custom$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "cppStandards.allowRule",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule\\.reported/",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "cppStandards.disableRule",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule\\.allowed/",
+          "group": "1_modify@2"
+        },
+        {
+          "command": "cppStandards.resetRule",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule\\..*\\.custom$/",
+          "group": "1_modify@3"
+        },
+        {
+          "command": "cppStandards.setRuleSeverity",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule\\./",
+          "group": "1_modify@4"
+        },
+        {
+          "command": "cppStandards.configureRules",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule\\./",
+          "group": "2_open@1"
+        },
+        {
+          "command": "cppStandards.copyRuleId",
+          "when": "view == cppStandards.singleRules && viewItem =~ /^rule\\./",
+          "group": "3_copy@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%config.title%",
+      "properties": {
+        "cppStandards.cpp.target": {
+          "type": "string",
+          "enum": [
+            "c++98",
+            "c++03",
+            "c++11",
+            "c++14",
+            "c++17",
+            "c++20",
+            "c++23",
+            "c++26"
+          ],
+          "default": "c++17",
+          "markdownDescription": "%config.cpp.target%",
+          "order": 1
+        },
+        "cppStandards.cpp.disabled": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "c++98",
+              "c++03",
+              "c++11",
+              "c++14",
+              "c++17",
+              "c++20",
+              "c++23",
+              "c++26"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "markdownDescription": "%config.cpp.disabled%",
+          "order": 2
+        },
+        "cppStandards.c.target": {
+          "type": "string",
+          "enum": [
+            "c89",
+            "c99",
+            "c11",
+            "c17",
+            "c23"
+          ],
+          "default": "c17",
+          "markdownDescription": "%config.c.target%",
+          "order": 3
+        },
+        "cppStandards.c.disabled": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "c89",
+              "c99",
+              "c11",
+              "c17",
+              "c23"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "markdownDescription": "%config.c.disabled%",
+          "order": 4
+        },
+        "cppStandards.gnuExtensions": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.gnuExtensions%",
+          "order": 5
+        },
+        "cppStandards.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.diagnostics.enabled%",
+          "order": 10
+        },
+        "cppStandards.diagnostics.mode": {
+          "type": "string",
+          "enum": [
+            "target",
+            "allEnabled"
+          ],
+          "enumDescriptions": [
+            "%config.diagnostics.mode.target%",
+            "%config.diagnostics.mode.allEnabled%"
+          ],
+          "default": "target",
+          "markdownDescription": "%config.diagnostics.mode%",
+          "order": 11
+        },
+        "cppStandards.diagnostics.severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "information",
+            "hint"
+          ],
+          "default": "warning",
+          "markdownDescription": "%config.diagnostics.severity%",
+          "order": 12
+        },
+        "cppStandards.diagnostics.checkRemovedFeatures": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.diagnostics.checkRemovedFeatures%",
+          "order": 13
+        },
+        "cppStandards.diagnostics.evaluatePreprocessor": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.diagnostics.evaluatePreprocessor%",
+          "order": 14
+        },
+        "cppStandards.rules": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "allow",
+                  "forbid"
+                ],
+                "enumDescriptions": [
+                  "%config.rules.default%",
+                  "%config.rules.allow%",
+                  "%config.rules.forbid%"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "allow",
+                      "forbid"
+                    ],
+                    "enumDescriptions": [
+                      "%config.rules.default%",
+                      "%config.rules.allow%",
+                      "%config.rules.forbid%"
+                    ]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "error",
+                      "warning",
+                      "information",
+                      "hint"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "markdownDescription": "%config.rules%",
+          "order": 15
+        },
+        "cppStandards.diagnostics.ignoredRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%config.diagnostics.ignoredRules%",
+          "markdownDeprecationMessage": "%config.diagnostics.ignoredRules.deprecated%",
+          "order": 99
+        },
+        "cppStandards.diagnostics.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%config.diagnostics.exclude%",
+          "order": 16
+        },
+        "cppStandards.sync.cpptools": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.sync.cpptools%",
+          "order": 20
+        },
+        "cppStandards.sync.clangd": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.sync.clangd%",
+          "order": 21
+        },
+        "cppStandards.compilerFlagStyle": {
+          "type": "string",
+          "enum": [
+            "gcc",
+            "msvc"
+          ],
+          "enumDescriptions": [
+            "%config.compilerFlagStyle.gcc%",
+            "%config.compilerFlagStyle.msvc%"
+          ],
+          "default": "gcc",
+          "markdownDescription": "%config.compilerFlagStyle%",
+          "order": 22
+        },
+        "cppStandards.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.statusBar.enabled%",
+          "order": 30
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test \"out/test/unit/*.test.js\"",
+    "test:integration": "npm run compile && node out/test/integration/runTest.js",
+    "package": "npx --yes @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "1.80.0",
+    "@vscode/test-electron": "^2.4.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.6.0"
+  }
+}

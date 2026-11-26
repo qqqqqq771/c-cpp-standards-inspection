@@ -3,6 +3,8 @@ import { analyze, standardVerdict } from './analysis/analyzer';
 import type { Violation } from './analysis/analyzer';
 import { getRule } from './analysis/rules';
 import type { FeatureRule } from './analysis/rules';
+import type { SyntaxEngine } from './analysis/syntax/engine';
+import type { SyntaxFacts } from './analysis/syntax/facts';
 import { checkedStandards, getDiagnosticsSettings, getLangState, isGnu, updateSetting } from './config';
 import type { DiagnosticsMode, DiagnosticsSettings } from './config';
 import { findStandard, langLabel, languageIdToLang } from './standards';
@@ -65,6 +67,8 @@ export class DiagnosticsManager implements vscode.Disposable {
   /** Files checked by "Check Workspace" that are not necessarily open. */
   private readonly scanned = new Set<string>();
   private readonly disposables: vscode.Disposable[] = [];
+  private syntaxEngine: SyntaxEngine | undefined;
+  private syntaxFailed = false;
 
   constructor(private readonly log: vscode.LogOutputChannel) {
     this.disposables.push(
@@ -91,6 +95,32 @@ export class DiagnosticsManager implements vscode.Disposable {
     }
     this.timers.clear();
     vscode.Disposable.from(...this.disposables).dispose();
+  }
+
+  /** Starts using the syntax engine (tree-sitter) and re-checks everything. */
+  setSyntaxEngine(engine: SyntaxEngine): void {
+    this.syntaxEngine = engine;
+    this.syntaxFailed = false;
+    this.recheckAll();
+  }
+
+  /** True when diagnostics currently use syntax trees. */
+  get usesSyntaxTree(): boolean {
+    return this.syntaxEngine !== undefined && !this.syntaxFailed && getDiagnosticsSettings().syntaxTree;
+  }
+
+  private syntaxFacts(text: string, lang: Lang, settings: DiagnosticsSettings): SyntaxFacts | undefined {
+    if (!settings.syntaxTree || !this.syntaxEngine || this.syntaxFailed) {
+      return undefined;
+    }
+    try {
+      return this.syntaxEngine.analyze(lang, text);
+    } catch (err) {
+      // A crash inside the WebAssembly parser leaves it in an unknown state: stop using it.
+      this.syntaxFailed = true;
+      this.log.error(`The syntax engine failed and is disabled until the window is reloaded: ${String(err)}`);
+      return undefined;
+    }
   }
 
   /** Re-checks every open C/C++ document and every previously scanned file. */
@@ -156,12 +186,14 @@ export class DiagnosticsManager implements vscode.Disposable {
     }
     const started = Date.now();
     const rules = settings.rules;
+    const syntax = this.syntaxFacts(text, lang, settings);
     const result = analyze(text, {
       lang,
       checked,
       gnu: isGnu(),
       checkRemoved: settings.checkRemoved,
       evaluatePreprocessor: settings.evaluatePreprocessor,
+      syntax,
       ruleState: rules.isEmpty
         ? undefined
         : (id) => {

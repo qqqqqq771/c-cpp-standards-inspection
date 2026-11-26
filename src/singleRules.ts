@@ -439,6 +439,9 @@ export class SingleRulesProvider implements vscode.TreeDataProvider<RuleTreeNode
       : vscode.l10n.t('Default ({0})', severityLabel(settings.severity));
     tooltip.appendMarkdown(`${escapeMarkdown(vscode.l10n.t('Severity'))}: ${escapeMarkdown(severity)}\n\n`);
     tooltip.appendMarkdown(escapeMarkdown(status.allowed ? vscode.l10n.t('Not reported') : vscode.l10n.t('Reported')));
+    if (rule.syntax) {
+      tooltip.appendMarkdown(`\n\n${escapeMarkdown(vscode.l10n.t('Detected from the syntax tree only (Use syntax trees option).'))}`);
+    }
     item.tooltip = tooltip;
     return item;
   }

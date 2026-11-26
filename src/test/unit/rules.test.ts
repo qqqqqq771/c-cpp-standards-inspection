@@ -25,8 +25,9 @@ describe('rule table integrity', () => {
 
   test('every rule has exactly one detector and patterns compile with the analyzer flags', () => {
     for (const rule of allRules()) {
+      // Syntax-only rules are detected from the tree (syntax/detectors.ts).
       const detectors = [rule.pattern, rule.token, rule.lookup].filter((d) => d !== undefined).length;
-      assert.equal(detectors, 1, rule.id);
+      assert.equal(detectors, rule.syntax ? 0 : 1, rule.id);
       if (rule.pattern) {
         assert.doesNotThrow(() => new RegExp(rule.pattern!.source, rule.pattern!.flags + 'gd'), rule.id);
       }

@@ -376,6 +376,11 @@
       ],
       "view/item/context": [
         {
+          "command": "cppStandards.syncNow",
+          "when": "view == cppStandards.view && viewItem == toolchainGroup",
+          "group": "inline"
+        },
+        {
           "command": "cppStandards.selectStandard",
           "when": "view == cppStandards.view && viewItem == langGroup",
           "group": "inline@1"
@@ -636,6 +641,12 @@
           "markdownDescription": "%config.diagnostics.evaluatePreprocessor%",
           "order": 14
         },
+        "cppStandards.diagnostics.syntaxTree": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.diagnostics.syntaxTree%",
+          "order": 14.5
+        },
         "cppStandards.rules": {
           "type": "object",
           "default": {},
@@ -719,6 +730,24 @@
           "markdownDescription": "%config.sync.clangd%",
           "order": 21
         },
+        "cppStandards.sync.cmake": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.sync.cmake%",
+          "order": 21.1
+        },
+        "cppStandards.sync.conformanceWarnings": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.sync.conformanceWarnings%",
+          "order": 21.2
+        },
+        "cppStandards.sync.clangTidyChecks": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.sync.clangTidyChecks%",
+          "order": 21.3
+        },
         "cppStandards.compilerFlagStyle": {
           "type": "string",
           "enum": [
@@ -757,5 +786,8 @@
     "@vscode/test-electron": "^2.4.0",
     "jsdom": "^26.1.0",
     "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "web-tree-sitter": "~0.26.13"
   }
 }

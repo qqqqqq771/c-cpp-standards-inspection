@@ -9,8 +9,9 @@ import { findStandard } from '../standards';
 import { computeLineStarts, lex, lineOf } from './lexer';
 import type { LexToken } from './lexer';
 import { analyzePreprocessor } from './preprocessor';
-import { ruleSet } from './rules';
+import { getRule, ruleSet } from './rules';
 import type { FeatureRule } from './rules';
+import type { SyntaxFacts } from './syntax/facts';
 
 export interface AnalyzeOptions {
   readonly lang: Lang;
@@ -32,6 +33,13 @@ export interface AnalyzeOptions {
   readonly ruleState?: (ruleId: string) => 'allow' | 'forbid' | undefined;
   /** Maximum number of violations to return (default 1000). */
   readonly maxResults?: number;
+  /**
+   * Facts from the syntax tree of `src` (see `SyntaxEngine`). When present, rules with a syntax
+   * detector use it instead of their regular expression (except where the parse failed), rules
+   * that need the tree are checked, names after `using namespace std` are resolved, and functions
+   * declared in the file are not mistaken for library functions.
+   */
+  readonly syntax?: SyntaxFacts;
 }
 
 export interface Violation {
@@ -257,6 +265,18 @@ export function analyze(src: string, options: AnalyzeOptions): AnalysisResult {
     return result;
   };
 
+  // Lines the parser could not handle: there, rules with a syntax detector fall back to their regex.
+  const syntax = options.syntax;
+  let unparsedLines: Uint8Array | undefined;
+  if (syntax && syntax.unparsed.length > 0) {
+    unparsedLines = new Uint8Array(lineStarts.length);
+    for (const [start, end] of syntax.unparsed) {
+      unparsedLines.fill(1, lineOf(lineStarts, start), lineOf(lineStarts, Math.max(start, end - 1)) + 1);
+    }
+  }
+  const viaSyntax = (rule: FeatureRule, start: number): boolean =>
+    syntax !== undefined && syntax.covered.has(rule.id) && !(unparsedLines && unparsedLines[lineOf(lineStarts, start)]);
+
   const raw: RawFinding[] = [];
   const addAll = (rules: readonly FeatureRule[] | undefined, start: number, end: number): void => {
     for (const rule of rules ?? []) {
@@ -275,10 +295,20 @@ export function analyze(src: string, options: AnalyzeOptions): AnalysisResult {
     let m: RegExpExecArray | null;
     while ((m = re.exec(masked)) !== null) {
       const range = m.indices?.groups?.hl ?? m.indices![0];
-      raw.push({ rule, start: range[0], end: range[1] });
+      if (!viaSyntax(rule, range[0])) {
+        raw.push({ rule, start: range[0], end: range[1] });
+      }
       if (m[0].length === 0) {
         re.lastIndex++;
       }
+    }
+  }
+
+  // Syntax-tree rules. Findings of rules that also have a regex are dropped where the regex is used.
+  for (const finding of syntax?.findings ?? []) {
+    const rule = getRule(finding.ruleId);
+    if (rule && rule.lang === options.lang && active(rule) && (!rule.pattern || viaSyntax(rule, finding.start))) {
+      raw.push({ rule, start: finding.start, end: finding.end });
     }
   }
 
@@ -298,20 +328,31 @@ export function analyze(src: string, options: AnalyzeOptions): AnalysisResult {
   // Lookup tables.
   const stdTable = set.lookups.get('std');
   const stdTests = set.lookupTests.get('std');
-  if (stdTable || stdTests) {
-    for (const m of masked.matchAll(STD_RE)) {
-      const start = m.index!;
-      const base = start + m[0].length - m[1].length;
-      const segments = [...m[1].matchAll(/[A-Za-z_]\w*/g)].map((s) => ({ name: s[0], end: base + s.index! + s[0].length }));
-      for (let k = segments.length; k >= 1; k--) {
-        const key = segments.slice(0, k).map((s) => s.name).join('::');
-        addAll(stdTable?.get(key), start, segments[k - 1].end);
+  /** Looks up `std::a::b::c` and its prefixes. Segments with `end < 0` come from a using-directive or alias. */
+  const lookupStd = (start: number, segments: readonly { name: string; end: number }[]): void => {
+    for (let k = segments.length; k >= 1; k--) {
+      if (segments[k - 1].end < 0) {
+        break;
       }
+      const key = segments.slice(0, k).map((s) => s.name).join('::');
+      addAll(stdTable?.get(key), start, segments[k - 1].end);
+    }
+    if (segments[0].end >= 0) {
       for (const rule of stdTests ?? []) {
         if (rule.lookup!.test!.test(segments[0].name) && active(rule)) {
           raw.push({ rule, start, end: segments[0].end });
         }
       }
+    }
+  };
+  if (stdTable || stdTests) {
+    for (const m of masked.matchAll(STD_RE)) {
+      const start = m.index!;
+      const base = start + m[0].length - m[1].length;
+      lookupStd(start, [...m[1].matchAll(/[A-Za-z_]\w*/g)].map((s) => ({ name: s[0], end: base + s.index! + s[0].length })));
+    }
+    for (const ref of syntax?.stdRefs ?? []) {
+      lookupStd(ref.start, ref.segments);
     }
   }
   const headerTable = set.lookups.get('header');
@@ -325,7 +366,8 @@ export function analyze(src: string, options: AnalyzeOptions): AnalysisResult {
   if (funcTable) {
     for (const m of masked.matchAll(FUNC_RE)) {
       const rules = funcTable.get(m[1]);
-      if (rules) {
+      // A function or macro the file declares itself is not the library's.
+      if (rules && !syntax?.declaredFunctions.has(m[1])) {
         addAll(rules, m.index!, m.index! + m[1].length);
       }
     }

@@ -1,5 +1,6 @@
 import { analyze } from '../../analysis/analyzer';
 import type { AnalyzeOptions, Violation } from '../../analysis/analyzer';
+import type { SyntaxEngine } from '../../analysis/syntax/engine';
 import { findStandard } from '../../standards';
 import type { Lang, StandardInfo } from '../../standards';
 
@@ -14,13 +15,21 @@ export function stds(ids: string | readonly string[]): StandardInfo[] {
   return list.sort((a, b) => a.rank - b.rank);
 }
 
+let engine: SyntaxEngine | undefined;
+
+/** Runs the helpers below with syntax facts from `syntax` (undefined: regular expressions only). */
+export function useSyntaxEngine(syntax: SyntaxEngine | undefined): void {
+  engine = syntax;
+}
+
 export function violations(
   src: string,
   lang: Lang,
   checked: string | readonly string[],
   options: Partial<AnalyzeOptions> = {},
 ): readonly Violation[] {
-  return analyze(src, { lang, checked: stds(checked), ...options }).violations;
+  const syntax = options.syntax ?? engine?.analyze(lang, src);
+  return analyze(src, { lang, checked: stds(checked), ...options, syntax }).violations;
 }
 
 /** Rule ids of the violations, in source order. */

@@ -6,5 +6,10 @@ out/test/**
 **/*.map
 **/*.ts
 node_modules/**
+!node_modules/web-tree-sitter/package.json
+!node_modules/web-tree-sitter/LICENSE
+!node_modules/web-tree-sitter/web-tree-sitter.cjs
+!node_modules/web-tree-sitter/web-tree-sitter.wasm
+scripts/**
 tsconfig.json
 .gitignore

@@ -12,6 +12,7 @@ const SOURCE = 'C/C++ Standards';
 const KEYS = [
   'cpp.target', 'cpp.disabled', 'c.target', 'c.disabled', 'gnuExtensions', 'diagnostics.enabled', 'diagnostics.mode',
   'diagnostics.severity', 'diagnostics.ignoredRules', 'rules', 'sync.clangd', 'compilerFlagStyle',
+  'diagnostics.syntaxTree', 'sync.conformanceWarnings', 'sync.clangTidyChecks', 'sync.cmake',
 ];
 
 const tests: Array<{ name: string; fn: () => Promise<void> }> = [];
@@ -305,6 +306,44 @@ test('clangd sync maintains and removes a managed block', async () => {
 
   await set('sync.clangd', false);
   await waitForAsync(async () => ((await read()) === 'Diagnostics:\n  UnusedIncludes: Strict\n' ? true : undefined), 'block removal');
+});
+
+test('the syntax engine checks rules that need a syntax tree, and can be turned off', async () => {
+  await set('c.target', 'c89');
+  const doc = await open('c', ['/* C89 */', 'int f(int n) {', '  int a = n;', '  a++;', '  int vla[n];', '  return a + vla[0];', '}', ''].join('\n'));
+  // The engine loads in the background after activation.
+  await waitForCodes(doc.uri, ['c99.mixed-declarations', 'c99.vla']);
+  assert.equal(ours(doc.uri).find((d) => d.code === 'c99.mixed-declarations')!.range.start.line, 4);
+  await set('diagnostics.syntaxTree', false);
+  await waitForCodes(doc.uri, []);
+});
+
+test('toolchain sync writes conformance warnings and clang-tidy checks into .clangd, and removes them', async () => {
+  const uri = workspaceUri('.clangd');
+  const read = async () => new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+  await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(''));
+  await set('cpp.target', 'c++20');
+  await set('cpp.disabled', ['c++98', 'c++03', 'c++11']);
+  await set('diagnostics.mode', 'allEnabled');
+  await set('rules', { 'cpp98.macro-constant': 'forbid' });
+  await set('sync.clangd', true);
+  await set('sync.conformanceWarnings', true);
+  await set('sync.clangTidyChecks', true);
+  const text = await waitForAsync(async () => {
+    const t = await read();
+    return t.includes('cppcoreguidelines-macro-usage') && t.includes('-Wpre-c++20-compat') ? t : undefined;
+  }, 'warnings and checks in .clangd');
+  assert.ok(text.includes("Add: ['-std=c++20', '-pedantic', '-Wpre-c++17-compat', '-Wpre-c++20-compat']"), text);
+  assert.ok(text.includes("    Add: ['cppcoreguidelines-macro-usage']"), text);
+
+  await set('rules', undefined);
+  await set('sync.conformanceWarnings', false);
+  await waitForAsync(async () => {
+    const t = await read();
+    return t.includes("Add: ['-std=c++20']\n") && !t.includes('ClangTidy') ? true : undefined;
+  }, 'plain block');
+  await set('sync.clangd', false);
+  await waitForAsync(async () => ((await read()) === '' ? true : undefined), 'block removal');
 });
 
 test('workspace check covers files that are not open', async () => {

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { registerCommands } from './commands';
 import { SECTION } from './config';
+import { SyntaxEngine } from './analysis/syntax/engine';
 import { DiagnosticsManager, StandardsCodeActionProvider } from './diagnostics';
 import { RulesPanel } from './rulesPanel';
 import { registerSingleRulesView } from './singleRules';
@@ -41,7 +42,8 @@ export function activate(context: vscode.ExtensionContext): void {
       diagnostics.recheckAll();
       RulesPanel.refresh();
       const affects = (key: string): boolean => e.affectsConfiguration(`${SECTION}.${key}`);
-      if (STANDARD_KEYS.some(affects) || affects('sync')) {
+      // Conformance warnings follow the diagnostics mode, clang-tidy checks follow the forbidden rules.
+      if (STANDARD_KEYS.some(affects) || affects('sync') || affects('diagnostics.mode') || affects('rules')) {
         sync.scheduleSync();
       }
     }),
@@ -58,6 +60,20 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   diagnostics.recheckAll();
   void sync.syncOnStartup();
+  loadSyntaxEngine(context, diagnostics, log);
+}
+
+/** Loads tree-sitter in the background; until then (or if it fails) the regex engine is used. */
+function loadSyntaxEngine(context: vscode.ExtensionContext, diagnostics: DiagnosticsManager, log: vscode.LogOutputChannel): void {
+  const started = Date.now();
+  SyntaxEngine.load(context.asAbsolutePath('grammars')).then(
+    (engine) => {
+      context.subscriptions.push(engine);
+      log.info(`Syntax engine (tree-sitter) loaded in ${Date.now() - started} ms`);
+      diagnostics.setSyntaxEngine(engine);
+    },
+    (err) => log.warn(`Syntax engine unavailable, using regular expressions only: ${String(err)}`),
+  );
 }
 
 export function deactivate(): void {

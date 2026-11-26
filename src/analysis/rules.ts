@@ -43,6 +43,11 @@ export interface FeatureRule {
   readonly pattern?: RegExp;
   readonly token?: (token: LexToken) => boolean;
   readonly lookup?: { readonly table: LookupTable; readonly key?: string; readonly test?: RegExp };
+  /**
+   * Detected only from the syntax tree (see `syntax/detectors.ts`); not reported while the syntax
+   * engine is unavailable. Other rules may also have a syntax detector that replaces their regex.
+   */
+  readonly syntax?: true;
   /** The rule is skipped for a file when this pattern matches anywhere in it. */
   readonly unless?: RegExp;
   /** The feature is accepted as an extension in GNU dialects (`-std=gnu++NN`). */
@@ -114,6 +119,11 @@ function removed(lang: Lang, std: string, id: string, name: string, pattern: Reg
 
 function token(lang: Lang, std: string, id: string, name: string, test: (t: LexToken) => boolean, extra: Extra = {}): void {
   add({ id: `${stdPrefix(std)}.${id}`, lang, kind: 'since', std, name, token: test, ...extra });
+}
+
+/** A feature that only the syntax tree can detect. */
+function syntaxRule(lang: Lang, kind: RuleKind, std: string, id: string, name: string, extra: Extra = {}): void {
+  add({ id: `${stdPrefix(std)}.${kind === 'removed' ? 'removed.' : ''}${id}`, lang, kind, std, name, syntax: true, ...extra });
 }
 
 function tableRules(
@@ -237,6 +247,7 @@ since('cpp', 'c++11', 'long-long', 'long long', /\blong\s+long\b/, { gnu: true }
 since('cpp', 'c++14', 'generic-lambda', 'generic lambdas (auto parameters)', re`${LAMBDA_START}\[[\w\s&=*,.]*\]\s*\((?:[^()]*,)?\s*(?:const\s+)?(?<hl>auto)\b`);
 since('cpp', 'c++14', 'lambda-init-capture', 'lambda init-captures', re`${LAMBDA_START}\[(?:\s*[&=]?\s*[\w.]*\s*,)*\s*&?\s*(?<hl>[A-Za-z_]\w*\s*=)(?!=)`);
 since('cpp', 'c++14', 'decltype-auto', 'decltype(auto)', /\bdecltype\s*\(\s*auto\s*\)/);
+syntaxRule('cpp', 'since', 'c++14', 'relaxed-constexpr', 'relaxed constexpr functions (local variables, loops, several statements)');
 since('cpp', 'c++14', 'return-type-deduction', 'function return type deduction', /\bauto\s+(?:[A-Za-z_]\w*\s*::\s*)*[A-Za-z_]\w*\s*\((?:[^;{}()]|\([^()]*\))*\)\s*(?:const\s*)?(?:&&?\s*)?(?:noexcept\s*)?(?:(?:override|final)\s*)*\{/);
 
 // C++17
@@ -249,6 +260,7 @@ since('cpp', 'c++17', 'fold-expression', 'fold expressions', /\(\s*\.\.\.\s*(?:&
 since('cpp', 'c++17', 'template-auto', 'template <auto> parameters', /\btemplate\s*<\s*(?:[^<>;{}]*,\s*)?auto\b/);
 since('cpp', 'c++17', 'static-assert-no-message', 'static_assert without a message', /\bstatic_assert\s*\((?:[^,;()]|\([^()]*\))*\)\s*;/);
 since('cpp', 'c++17', 'lambda-star-this', 'lambda capture of *this', re`${LAMBDA_START}\[[^\[\]]*?(?<hl>\*\s*this)\b`);
+syntaxRule('cpp', 'since', 'c++17', 'ctad', 'class template argument deduction (std::vector v{1, 2})');
 since('cpp', 'c++17', 'attribute-using', 'attribute namespaces ([[using ns: ...]])', /\[\[\s*using\b/);
 
 // C++20
@@ -354,6 +366,8 @@ since('c', 'c99', 'func', '__func__', /\b__func__\b/, { gnu: true });
 since('c', 'c99', 'va-args', 'variadic macros (__VA_ARGS__)', /\b__VA_ARGS__\b/, { gnu: true });
 since('c', 'c99', 'pragma-operator', '_Pragma operator', /\b_Pragma\s*\(/);
 since('c', 'c99', 'static-array-parameter', 'static in array parameter declarations', /\[\s*(?:(?:const|restrict|volatile)\s+)*static\b/);
+syntaxRule('c', 'since', 'c99', 'mixed-declarations', 'declarations mixed with code', { gnu: true });
+syntaxRule('c', 'since', 'c99', 'vla', 'variable-length arrays', { gnu: true });
 since('c', 'c99', 'stdint-types', '<stdint.h> integer types', /\bu?int(?:_least|_fast)?(?:8|16|32|64)_t\b|\bu?int(?:ptr|max)_t\b/, { unless: /\btypedef\b[^;]*\bu?int(?:8|16|32|64)_t\s*;/ });
 
 // C11
@@ -391,6 +405,7 @@ add({
 
 // Removed C features
 removed('c', 'c23', 'atomic-var-init', 'ATOMIC_VAR_INIT', /\bATOMIC_VAR_INIT\b/);
+syntaxRule('c', 'removed', 'c23', 'kr-definition', 'K&R-style function definitions');
 
 // C literal tokens
 token('c', 'c99', 'line-comment', '// comments', (t) => t.kind === 'lineComment', { gnu: true });

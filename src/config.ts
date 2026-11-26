@@ -29,6 +29,8 @@ export interface DiagnosticsSettings {
   readonly severity: SeverityName;
   readonly checkRemoved: boolean;
   readonly evaluatePreprocessor: boolean;
+  /** Use the syntax tree (tree-sitter) when it is available. */
+  readonly syntaxTree: boolean;
   readonly rules: RuleSettings;
   readonly exclude: readonly string[];
 }
@@ -71,6 +73,7 @@ export function getDiagnosticsSettings(): DiagnosticsSettings {
     severity: SEVERITIES.find((s) => s === severity) ?? 'warning',
     checkRemoved: conf.get<boolean>('diagnostics.checkRemovedFeatures', true),
     evaluatePreprocessor: conf.get<boolean>('diagnostics.evaluatePreprocessor', true),
+    syntaxTree: conf.get<boolean>('diagnostics.syntaxTree', true),
     rules: getRuleSettings(),
     exclude: stringArray(conf.get<unknown>('diagnostics.exclude', [])),
   };

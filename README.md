@@ -60,6 +60,17 @@ int* value;
 
 Supported: `__cplusplus`, `__STDC_VERSION__`, `_MSVC_LANG`, feature-test macros (`__cpp_concepts`, `__cpp_lib_optional`, ...), `__has_include(<header>)`, `__has_cpp_attribute`, `#if 0`.
 
+**Syntax trees** (option "Use syntax trees (tree-sitter)", on by default): each file is also parsed with [tree-sitter](https://tree-sitter.github.io/) (bundled as WebAssembly, nothing to install), which makes the checks more precise:
+
+| What | Example |
+| --- | --- |
+| Syntax-aware detection of casts, lambdas, `if`/`switch` initializers, inline variables, return type deduction, trailing return types, `auto` parameters, structured bindings, range-for and variadic functions; in C, `for` declarations and compound literals | `if (auto it = std::find_if(b, e, [](int x) { return x > 0; }); it != e)` is reported as a C++17 if-initializer, `void f(Sortable auto x)` as an abbreviated template, `(Widget)w` as a C-style cast, but `(a) * b` is not |
+| Names made visible by `using namespace std`, `using std::name` and namespace aliases | `using namespace std; optional<int> o;` → `std::optional` needs C++17; `namespace fs = std::filesystem; fs::path p;` |
+| Functions the file declares itself are not library functions | a C89 file that defines its own `round()` is not told that `round()` needs C99 |
+| Rules that need a syntax tree | C99 declarations mixed with code and variable-length arrays, K&R function definitions (removed in C23), C++17 class template argument deduction (`std::vector v{1, 2}`, `std::lock_guard lock(m)`), C++14 relaxed `constexpr` functions |
+
+Lines the grammar cannot parse (code being typed, very new syntax such as `if consteval` or modules, macro bodies) are checked with the patterns, as are files over 1 MB. Parsing takes about 15 ms for a 20 KB file. If the engine cannot be loaded, everything is checked with the patterns.
+
 **Quick fixes** (light bulb):
 
 - Change the target to the standard the feature needs (enabling it first if necessary)
@@ -141,11 +152,21 @@ Rule settings are stored in `cppStandards.rules` (workspace settings) and can al
 
 Exact rule ids take precedence over prefixes, and longer prefixes over shorter ones; state and severity are resolved independently. "Forbid" wins over GNU extensions and the "Report removed features" switch. The old setting `cppStandards.diagnostics.ignoredRules` still works (it means "allow") but is deprecated.
 
-### Sync to IntelliSense and builds
+### Sync to the toolchain
 
-- **Microsoft C/C++ extension** (on by default): writes `C_Cpp.default.cppStandard` / `C_Cpp.default.cStandard` when the target changes. If `c_cpp_properties.json` sets `cppStandard` explicitly, you are offered to change it to `${default}`. (That extension does not know C++26 yet; `c++23` is synced instead.)
-- **clangd** (enable `cppStandards.sync.clangd`): maintains a managed block in `.clangd` that adds `-std=` per file type. Turning the setting off removes the block; content outside it is left alone.
-- **tasks.json / launch.json**: use `${command:cppStandards.cppFlag}` or `${command:cppStandards.cFlag}` to get the compiler flag for the current target:
+The extension never runs a compiler. It writes the selected standards and rules into the configuration of the C/C++ tools you already use, and those tools then report problems with full compiler semantics. The options are under **Options → Sync to Toolchain** in the view (the ⟳ button on the group syncs immediately):
+
+| Option (setting) | Writes | Used by |
+| --- | --- | --- |
+| Sync to the Microsoft C/C++ extension (`sync.cpptools`, on by default) | `C_Cpp.default.cppStandard` / `C_Cpp.default.cStandard`. If `c_cpp_properties.json` sets `cppStandard` explicitly, you are offered to change it to `${default}`. (That extension does not know C++26 yet; `c++23` is synced instead.) | IntelliSense |
+| Sync to .clangd (`sync.clangd`) | A managed block in `.clangd` with `-std=` per file type. Content outside the block is left alone. | clangd |
+| Sync to CMake Tools (`sync.cmake`) | `CMAKE_CXX_STANDARD`, `CMAKE_C_STANDARD`, `*_STANDARD_REQUIRED=ON` and `*_EXTENSIONS` (from the GNU option) in `cmake.configureSettings`. Targets that set their own standard keep it. | CMake configure, and every tool that reads the build |
+| Add conformance warnings (`sync.conformanceWarnings`) | `-pedantic` (ISO dialects) and, when code must compile with every enabled standard, Clang's `-Wpre-c++17-compat`-style warnings for each standard between the oldest enabled one and the target (C: `-Wdeclaration-after-statement`, `-Wvla`, `-Wpre-c11-compat`, `-Wpre-c2x-compat`) | clangd (in the `.clangd` block), the C/C++ extension's code analysis (`C_Cpp.codeAnalysis.clangTidy.args`) |
+| Map forbidden rules to clang-tidy checks (`sync.clangTidyChecks`) | The closest clang-tidy check for each forbidden core rule, e.g. `cppcoreguidelines-macro-usage` for macro constants, `google-readability-casting` for C-style casts, `modernize-use-using` for `typedef`, `cert-err34-c` for `atoi` | clangd (in the `.clangd` block), the C/C++ extension's code analysis (`C_Cpp.codeAnalysis.clangTidy.checks.enabled`) |
+
+Settings shared with other extensions are merged, not overwritten: the extension remembers which entries it added, changes only those, and removes them when the option is turned off. Entries you added yourself are never touched. Each option's tooltip shows what it currently writes. The C/C++ extension's code analysis only runs when you enable it (`C_Cpp.codeAnalysis.clangTidy.enabled`); this extension does not turn it on.
+
+For builds outside these tools, **tasks.json / launch.json** can use `${command:cppStandards.cppFlag}` or `${command:cppStandards.cFlag}` to get the compiler flag for the current target:
 
 ```jsonc
 {
@@ -172,11 +193,15 @@ With `cppStandards.compilerFlagStyle` set to `gcc` this returns `-std=c++17`, wi
 | `cppStandards.diagnostics.severity` | `warning` | `error` / `warning` / `information` / `hint` |
 | `cppStandards.diagnostics.checkRemovedFeatures` | `true` | Report removed features |
 | `cppStandards.diagnostics.evaluatePreprocessor` | `true` | Evaluate `#if` conditions |
+| `cppStandards.diagnostics.syntaxTree` | `true` | Use syntax trees (tree-sitter) for more precise checks |
 | `cppStandards.rules` | `{}` | Per-rule settings (default / allow / forbid, plus severity); see "Rule settings panel" |
 | `cppStandards.diagnostics.ignoredRules` | `[]` | Deprecated; use `"allow"` in `cppStandards.rules` instead |
 | `cppStandards.diagnostics.exclude` | `[]` | Glob patterns of files that are not checked, e.g. `**/third_party/**` |
 | `cppStandards.sync.cpptools` | `true` | Sync to the Microsoft C/C++ extension |
 | `cppStandards.sync.clangd` | `false` | Sync to `.clangd` |
+| `cppStandards.sync.cmake` | `false` | Sync to CMake Tools (`cmake.configureSettings`) |
+| `cppStandards.sync.conformanceWarnings` | `false` | Add Clang conformance warnings to the synced tools |
+| `cppStandards.sync.clangTidyChecks` | `false` | Add clang-tidy checks for forbidden rules to the synced tools |
 | `cppStandards.compilerFlagStyle` | `gcc` | Flag syntax returned by `${command:...}` |
 | `cppStandards.statusBar.enabled` | `true` | Show the target in the status bar |
 
@@ -186,11 +211,12 @@ Rule ids have the form `<standard>.<feature>`, e.g. `cpp17.structured-binding`, 
 
 ## Limitations
 
-Feature detection is based on a lexer and regular expressions, without full C++ semantic analysis:
+Feature detection uses a lexer, regular expressions and a syntax tree per file, but no compiler semantics (types, overload resolution, templates). For those, sync the configuration to your compiler-based tools (see "Sync to the toolchain").
 
-- Only library names with the `std::` prefix are recognized; `optional` written after `using namespace std;` is not.
+- Names are resolved within one file: a `using namespace std;` in an included header is not seen. Without the syntax tree, only library names with the `std::` prefix are recognized.
 - Code produced by macro expansion is not analyzed (macro definitions themselves are checked).
-- "Macro constants" only matches object-like macros whose replacement contains a literal (`#define MAX 100`, `#define NAME "x"`), not include guards or macros such as `#define EXPORT __declspec(...)`. "C-style casts" only matches casts to built-in types, `xxx_t` types and pointer/reference types.
+- "Macro constants" only matches object-like macros whose replacement contains a literal (`#define MAX 100`, `#define NAME "x"`), not include guards or macros such as `#define EXPORT __declspec(...)`. Without the syntax tree, "C-style casts" only matches casts to built-in types, `xxx_t` types and pointer/reference types.
+- The tree-sitter C++ grammar does not yet know modules, `if consteval`, deducing `this` or some C++26 syntax; those lines are checked with patterns.
 - A few constructs may be reported wrongly or missed; use suppression comments, rule settings ("Allow") or `exclude`.
 
 ## Development
@@ -201,6 +227,7 @@ npm run compile            # compile to out/
 npm test                   # unit tests (node:test)
 npm run test:integration   # integration tests in a downloaded VS Code
 npm run package            # build a .vsix (change the publisher in package.json to your own first)
+node scripts/update-grammars.mjs [c-version] [cpp-version]   # refresh grammars/*.wasm from npm
 ```
 
 Press `F5` ("Run Extension") in VS Code to open an Extension Development Host with the sample files (`samples/`); "Run Extension (Chinese UI)" starts it with the Chinese UI.
@@ -208,13 +235,16 @@ Press `F5` ("Run Extension") in VS Code to open an Extension Development Host wi
 Code layout:
 
 - `src/analysis/`: analysis engine independent of VS Code (lexer, preprocessor evaluation, rule tables, analyzer), testable on its own
+- `src/analysis/syntax/`: tree-sitter engine (`engine.ts` loads the WebAssembly runtime and `grammars/`), syntax detectors and name resolution (`detectors.ts`)
 - `src/standards.ts`: metadata of each standard (compiler flags, macro values, headline features)
 - `src/tree.ts`, `src/statusBar.ts`, `src/commands.ts`: user interface
 - `src/diagnostics.ts`: diagnostics and quick fixes
 - `src/rulesPanel.ts`, `media/rules.js`, `media/rules.css`: rule settings panel; `src/analysis/ruleSettings.ts`: parsing and updating rule settings
 - `src/singleRules.ts`: Single Rule view; `src/analysis/ruleGroups.ts`: grouping and on/off logic of the view (independent of VS Code, testable on its own)
-- `src/sync.ts`: sync to cpptools / clangd
+- `src/sync.ts`: sync to cpptools / clangd / CMake Tools; `src/toolchain.ts`: what is written (flags, clang-tidy mapping, `.clangd` block, merging of shared settings), testable on its own
 
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
+
+Bundled third-party components: the [web-tree-sitter](https://github.com/tree-sitter/tree-sitter) runtime and the [tree-sitter-c](https://github.com/tree-sitter/tree-sitter-c) and [tree-sitter-cpp](https://github.com/tree-sitter/tree-sitter-cpp) grammars, all under the MIT license (see `grammars/LICENSE` and `node_modules/web-tree-sitter/LICENSE`).

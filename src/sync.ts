@@ -1,17 +1,77 @@
 /**
- * Propagates the target standards to IntelliSense providers:
- *  - the Microsoft C/C++ extension (`C_Cpp.default.cppStandard` / `C_Cpp.default.cStandard`),
- *  - clangd, through a managed block in `.clangd` (opt-in).
+ * Propagates the selected standards and rules to the C/C++ toolchain by writing configuration,
+ * never by running the tools:
+ *  - the Microsoft C/C++ extension (`C_Cpp.default.cppStandard` / `cStandard`, and the
+ *    clang-tidy checks and arguments used by its code analysis),
+ *  - clangd, through a managed block in `.clangd` (opt-in),
+ *  - CMake Tools, through `CMAKE_CXX_STANDARD` / `CMAKE_C_STANDARD` in `cmake.configureSettings` (opt-in).
+ *
+ * Settings shared with other extensions are merged: the extension remembers which entries it
+ * added and only ever changes those.
  */
 
 import * as vscode from 'vscode';
-import { getConfig, getLangState, isExplicitlySet, isGnu } from './config';
-import { compilerFlag, cpptoolsValue } from './standards';
+import { checkedStandards, getConfig, getLangState, getRuleSettings, isExplicitlySet, isGnu, settingsTarget } from './config';
+import type { DiagnosticsMode } from './config';
+import { cpptoolsValue, findStandard, LANGS } from './standards';
+import type { Lang } from './standards';
+import {
+  CLANGD_BLOCK_RE,
+  clangdBlock,
+  clangTidyChecks,
+  cmakeSettings,
+  conformanceFlags,
+  mergeManagedList,
+  mergeManagedObject,
+  removeClangdBlock,
+  upsertClangdBlock,
+} from './toolchain';
+import type { ClangdLanguage } from './toolchain';
 
-const CLANGD_BEGIN = '# >>> cpp-standards: managed by the C/C++ Standards extension, changes inside this block are overwritten >>>';
-const CLANGD_END = '# <<< cpp-standards <<<';
-const CLANGD_BLOCK_RE = /^# >>> cpp-standards:.*\r?\n[\s\S]*?^# <<< cpp-standards <<<[^\n]*(?:\r?\n|$)/m;
 const DISMISS_PROPERTIES_KEY = 'cppStandards.dismissPropertiesOverride';
+const MANAGED_KEY = 'cppStandards.managed.';
+
+/** What the enabled sync options write, per language. Also shown in the Options tooltips. */
+export interface ToolchainPlan {
+  /** Conformance warnings, or empty when `sync.conformanceWarnings` is off. */
+  readonly flags: Readonly<Record<Lang, readonly string[]>>;
+  /** clang-tidy checks for forbidden rules, or empty when `sync.clangTidyChecks` is off. */
+  readonly checks: Readonly<Record<Lang, readonly string[]>>;
+  /** CMake cache variables for the target standards (whether or not `sync.cmake` is on). */
+  readonly cmake: Readonly<Record<string, string>>;
+}
+
+export function toolchainPlan(): ToolchainPlan {
+  const conf = getConfig();
+  const gnu = isGnu();
+  const mode: DiagnosticsMode = conf.get<string>('diagnostics.mode', 'target') === 'allEnabled' ? 'allEnabled' : 'target';
+  const withFlags = conf.get<boolean>('sync.conformanceWarnings', false);
+  const withChecks = conf.get<boolean>('sync.clangTidyChecks', false);
+  const rules = withChecks ? getRuleSettings() : undefined;
+  const flags = { c: [] as string[], cpp: [] as string[] };
+  const checks = { c: [] as string[], cpp: [] as string[] };
+  for (const lang of LANGS) {
+    const state = getLangState(lang);
+    if (withFlags && state.target) {
+      const oldest = checkedStandards(state, mode)[0] ?? state.target;
+      flags[lang] = conformanceFlags(lang, state.target, oldest, gnu, (id) => findStandard(id)?.rank ?? Number.MAX_SAFE_INTEGER);
+    }
+    if (rules) {
+      checks[lang] = clangTidyChecks(lang, (id) => rules.resolve(id).state === 'forbid');
+    }
+  }
+  return { flags, checks, cmake: cmakeSettings(getLangState('cpp').target, getLangState('c').target, gnu) };
+}
+
+/** True when the Microsoft C/C++ extension's settings are registered. */
+export function hasCpptools(): boolean {
+  return vscode.workspace.getConfiguration('C_Cpp.default').inspect('cppStandard')?.defaultValue !== undefined;
+}
+
+/** True when CMake Tools' settings are registered. */
+export function hasCmakeTools(): boolean {
+  return vscode.workspace.getConfiguration('cmake').inspect('configureSettings')?.defaultValue !== undefined;
+}
 
 export class SyncManager implements vscode.Disposable {
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -37,38 +97,46 @@ export class SyncManager implements vscode.Disposable {
   }
 
   /**
-   * On startup only sync when the user has explicitly configured standards, so that merely opening
-   * a project does not write settings files.
+   * On startup only sync when the user has explicitly configured standards (or opted into a
+   * sync), so that merely opening a project does not write settings files.
    */
   async syncOnStartup(): Promise<void> {
     const conf = getConfig();
     const configured = ['cpp.target', 'c.target', 'cpp.disabled', 'c.disabled'].some(isExplicitlySet);
     try {
-      if (configured && conf.get<boolean>('sync.cpptools', true)) {
+      const cpptools = conf.get<boolean>('sync.cpptools', true);
+      if (configured && cpptools) {
         await this.syncCpptools(false);
       }
+      await this.syncCpptoolsAnalysis(cpptools);
       if (conf.get<boolean>('sync.clangd', false)) {
         await this.syncClangd(true);
+      }
+      if (conf.get<boolean>('sync.cmake', false)) {
+        await this.syncCmake(true);
       }
     } catch (err) {
       this.log.error(`Startup sync failed: ${String(err)}`);
     }
   }
 
-  /** Runs every enabled sync. When `manual`, reports the outcome to the user. */
+  /** Runs every enabled sync (and undoes disabled ones). When `manual`, reports the outcome. */
   async syncAll(manual: boolean): Promise<void> {
     const conf = getConfig();
     const done: string[] = [];
-    if (conf.get<boolean>('sync.cpptools', true)) {
-      const result = await this.syncCpptools(manual);
-      if (result) {
-        done.push(vscode.l10n.t('Microsoft C/C++ extension'));
-      }
+    const cpptools = conf.get<boolean>('sync.cpptools', true);
+    if (cpptools && (await this.syncCpptools(manual))) {
+      done.push(vscode.l10n.t('Microsoft C/C++ extension'));
     }
+    await this.syncCpptoolsAnalysis(cpptools);
     const clangdEnabled = conf.get<boolean>('sync.clangd', false);
     const clangdChanged = await this.syncClangd(clangdEnabled);
     if (clangdEnabled && (clangdChanged || manual)) {
       done.push('.clangd');
+    }
+    const cmakeEnabled = conf.get<boolean>('sync.cmake', false);
+    if ((await this.syncCmake(cmakeEnabled)) && cmakeEnabled) {
+      done.push('CMake Tools');
     }
     if (manual) {
       if (done.length > 0) {
@@ -76,7 +144,7 @@ export class SyncManager implements vscode.Disposable {
       } else {
         const open = vscode.l10n.t('Open Settings');
         const choice = await vscode.window.showInformationMessage(
-          vscode.l10n.t('Nothing to sync. Enable "Sync: Cpptools" or "Sync: Clangd" in the settings.'),
+          vscode.l10n.t('Nothing to sync. Enable "Sync: Cpptools", "Sync: Clangd" or "Sync: Cmake" in the settings.'),
           open,
         );
         if (choice === open) {
@@ -88,8 +156,7 @@ export class SyncManager implements vscode.Disposable {
 
   /** Returns true when the Microsoft C/C++ extension is present and its settings are up to date. */
   private async syncCpptools(manual: boolean): Promise<boolean> {
-    const probe = vscode.workspace.getConfiguration('C_Cpp.default').inspect('cppStandard');
-    if (probe?.defaultValue === undefined) {
+    if (!hasCpptools()) {
       if (manual) {
         this.log.info('The Microsoft C/C++ extension is not installed; skipping C_Cpp.default.* sync.');
       }
@@ -120,6 +187,66 @@ export class SyncManager implements vscode.Disposable {
     }
     await this.checkPropertiesOverride(manual);
     return true;
+  }
+
+  /**
+   * Keeps the clang-tidy checks and arguments of the C/C++ extension's code analysis in step with
+   * the forbidden rules and conformance warnings. Removes what it added when disabled.
+   */
+  private async syncCpptoolsAnalysis(enabled: boolean): Promise<void> {
+    if (!hasCpptools()) {
+      return;
+    }
+    const plan = toolchainPlan();
+    const unique = (lists: ReadonlyArray<readonly string[]>): string[] => [...new Set(lists.flat())];
+    const checks = enabled ? unique([plan.checks.cpp, plan.checks.c]) : [];
+    const args = enabled ? unique([plan.flags.cpp, plan.flags.c]).map((flag) => `--extra-arg=${flag}`) : [];
+    await this.updateManagedList('C_Cpp', 'codeAnalysis.clangTidy.checks.enabled', checks);
+    await this.updateManagedList('C_Cpp', 'codeAnalysis.clangTidy.args', args);
+  }
+
+  /** Writes CMake cache variables for the target standards (or removes them). Returns true when CMake Tools is present. */
+  private async syncCmake(enabled: boolean): Promise<boolean> {
+    if (!hasCmakeTools()) {
+      if (enabled) {
+        this.log.info('CMake Tools is not installed; skipping cmake.configureSettings sync.');
+      }
+      return false;
+    }
+    const conf = vscode.workspace.getConfiguration('cmake');
+    const target = settingsTarget();
+    const info = conf.inspect<unknown>('configureSettings');
+    const raw = target === vscode.ConfigurationTarget.Workspace ? info?.workspaceValue : info?.globalValue;
+    const current = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+    const stateKey = `${MANAGED_KEY}cmake.configureSettings`;
+    const managed = this.context.workspaceState.get<Record<string, string>>(stateKey, {});
+    const result = mergeManagedObject(current, managed, enabled ? toolchainPlan().cmake : {});
+    if (JSON.stringify(result.value) !== JSON.stringify(current)) {
+      await conf.update('configureSettings', Object.keys(result.value).length > 0 ? result.value : undefined, target);
+      this.log.info(`Updated cmake.configureSettings: ${JSON.stringify(result.value)}`);
+    }
+    await this.context.workspaceState.update(stateKey, result.managed);
+    return true;
+  }
+
+  /** Merges `desired` into a list setting of another extension, see `mergeManagedList`. */
+  private async updateManagedList(section: string, key: string, desired: readonly string[]): Promise<void> {
+    const conf = vscode.workspace.getConfiguration(section);
+    const target = settingsTarget();
+    const info = conf.inspect<unknown>(key);
+    const raw = target === vscode.ConfigurationTarget.Workspace ? info?.workspaceValue : info?.globalValue;
+    const current = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
+    const stateKey = `${MANAGED_KEY}${section}.${key}`;
+    const managed = this.context.workspaceState.get<string[]>(stateKey, []);
+    if (managed.length === 0 && desired.length === 0) {
+      return;
+    }
+    const result = mergeManagedList(current, managed, desired);
+    if (result.value.join('\n') !== current.join('\n')) {
+      await conf.update(key, result.value.length > 0 ? result.value : undefined, target);
+      this.log.info(`Updated ${section}.${key}: ${JSON.stringify(result.value)}`);
+    }
+    await this.context.workspaceState.update(stateKey, result.managed);
   }
 
   /** Warns when c_cpp_properties.json pins a standard, which overrides C_Cpp.default.*. */
@@ -167,13 +294,14 @@ export class SyncManager implements vscode.Disposable {
    */
   private async syncClangd(enabled: boolean): Promise<boolean> {
     let changed = false;
+    const block = enabled ? currentClangdBlock() : '';
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       const uri = vscode.Uri.joinPath(folder.uri, '.clangd');
       const existing = (await readText(uri)) ?? '';
       if (!enabled && !CLANGD_BLOCK_RE.test(existing)) {
         continue;
       }
-      const updated = enabled ? upsertClangdBlock(existing, clangdBlock()) : existing.replace(CLANGD_BLOCK_RE, '').replace(/\n{3,}$/, '\n\n');
+      const updated = enabled ? upsertClangdBlock(existing, block) : removeClangdBlock(existing);
       if (updated !== existing) {
         await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(updated));
         this.log.info(`${enabled ? 'Updated' : 'Removed managed block from'} ${uri.fsPath}`);
@@ -184,37 +312,16 @@ export class SyncManager implements vscode.Disposable {
   }
 }
 
-function clangdBlock(): string {
-  const gnu = isGnu();
-  const c = getLangState('c').target;
-  const cpp = getLangState('cpp').target;
-  const lines = [CLANGD_BEGIN];
-  if (c) {
-    lines.push('---', 'If:', "  PathMatch: '.*\\.(c|i)'", 'CompileFlags:', "  Remove: ['-std=*']", `  Add: ['${compilerFlag(c, 'gcc', gnu)}']`);
+function currentClangdBlock(): string {
+  const plan = toolchainPlan();
+  const languages: ClangdLanguage[] = [];
+  for (const lang of LANGS) {
+    const target = getLangState(lang).target;
+    if (target) {
+      languages.push({ lang, target, flags: plan.flags[lang], checks: plan.checks[lang] });
+    }
   }
-  if (cpp) {
-    lines.push(
-      '---',
-      'If:',
-      "  PathMatch: '.*\\.(cc|cp|cpp|cxx|c\\+\\+|ii|cppm|ixx|hh|hpp|hxx|h\\+\\+|ipp|tpp|txx|inl)'",
-      'CompileFlags:',
-      "  Remove: ['-std=*']",
-      `  Add: ['${compilerFlag(cpp, 'gcc', gnu)}']`,
-    );
-  }
-  lines.push(CLANGD_END);
-  return lines.join('\n') + '\n';
-}
-
-/** Replaces the managed block in a `.clangd` file, or appends it. Exported for tests. */
-export function upsertClangdBlock(existing: string, block: string): string {
-  if (CLANGD_BLOCK_RE.test(existing)) {
-    return existing.replace(CLANGD_BLOCK_RE, () => block);
-  }
-  if (existing.length === 0) {
-    return block;
-  }
-  return existing + (existing.endsWith('\n') ? '' : '\n') + block;
+  return clangdBlock(languages, isGnu());
 }
 
 async function readText(uri: vscode.Uri): Promise<string | undefined> {

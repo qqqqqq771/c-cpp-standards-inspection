@@ -61,5 +61,9 @@
   "config.compilerFlagStyle": "`${command:cppStandards.cppFlag}` 和 `${command:cppStandards.cFlag}`（可在 tasks.json 和 launch.json 中使用）返回的编译器选项格式。",
   "config.compilerFlagStyle.gcc": "GCC 和 Clang：`-std=c++17`",
   "config.compilerFlagStyle.msvc": "MSVC：`/std:c++17`",
-  "config.statusBar.enabled": "当活动文件为 C 或 C++ 时，在状态栏显示目标标准。"
+  "config.statusBar.enabled": "当活动文件为 C 或 C++ 时，在状态栏显示目标标准。",
+  "config.diagnostics.syntaxTree": "使用 tree-sitter（内置，WebAssembly）解析文件以获得更精确的检查：基于语法识别强制转换、lambda、`if`/`switch` 初始化语句、`auto` 参数等；解析经 `using namespace std`、`using std::name` 和命名空间别名可见的名称；文件自己声明的函数不会被当作库函数；并支持只能基于语法树的规则（C99 声明与代码混合和变长数组、K&R 函数定义、C++17 类模板实参推导、C++14 放宽的 `constexpr`）。无法解析的行以及超过 1 MB 的文件仍使用模式匹配检查。",
+  "config.sync.cmake": "将目标标准对应的 `CMAKE_CXX_STANDARD`、`CMAKE_C_STANDARD`、`*_STANDARD_REQUIRED` 和 `*_EXTENSIONS` 写入 CMake Tools 的 `cmake.configureSettings`（工作区）。只修改本扩展添加的条目；关闭此设置时会再次移除它们。",
+  "config.sync.conformanceWarnings": "为已同步的工具添加 Clang 警告，报告所选标准不接受的代码：`-pedantic`（ISO 方言），以及在代码必须兼容所有已启用标准时，针对每个较新标准的 `-Wpre-c++17-compat` 类警告。写入受管理的 `.clangd` 块（`#cppStandards.sync.clangd#`）和 `C_Cpp.codeAnalysis.clangTidy.args`（`#cppStandards.sync.cpptools#`）。",
+  "config.sync.clangTidyChecks": "为每条被禁止的核心规则启用最接近的 clang-tidy 检查（例如禁止宏常量时启用 `cppcoreguidelines-macro-usage`）。写入受管理的 `.clangd` 块（`#cppStandards.sync.clangd#`）和 `C_Cpp.codeAnalysis.clangTidy.checks.enabled`（`#cppStandards.sync.cpptools#`）。"
 }
